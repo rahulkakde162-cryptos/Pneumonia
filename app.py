@@ -3,6 +3,8 @@ import numpy as np
 from PIL import Image
 import tensorflow as tf
 
+from tensorflow.keras.applications.efficientnet import preprocess_input
+
 
 # --------------------------------------------------
 # Page configuration
@@ -24,6 +26,9 @@ def load_model():
 
     model = tf.keras.models.load_model(
         "best_pneumonia_model.keras",
+        custom_objects={
+            "preprocess_input": preprocess_input
+        },
         compile=False,
         safe_mode=False
     )
