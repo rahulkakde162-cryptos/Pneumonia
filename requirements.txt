@@ -1,6 +1,4 @@
-
-tensorflow==2.20.0
+tensorflow
 streamlit
 numpy
-pydicom
-opencv-python-headless
+pillow

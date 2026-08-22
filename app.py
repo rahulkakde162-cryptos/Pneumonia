@@ -1,83 +1,136 @@
-
 import streamlit as st
 import numpy as np
+from PIL import Image
 import tensorflow as tf
-import pydicom
-import cv2
 
-MODEL_PATH = "best_pneumonia_model.keras"
 
-model = tf.keras.models.load_model(MODEL_PATH)
+# --------------------------------------------------
+# Page configuration
+# --------------------------------------------------
 
-st.title("Pneumonia Detection from Chest X-ray")
+st.set_page_config(
+    page_title="Pneumonia Detection",
+    page_icon="🫁",
+    layout="centered"
+)
+
+
+# --------------------------------------------------
+# Load trained model
+# --------------------------------------------------
+
+@st.cache_resource
+def load_model():
+
+    model = tf.keras.models.load_model(
+        "best_pneumonia_model.keras",
+        compile=False,
+        safe_mode=False
+    )
+
+    return model
+
+
+model = load_model()
+
+
+# --------------------------------------------------
+# Application title
+# --------------------------------------------------
+
+st.title("🫁 Pneumonia Detection")
 
 st.write(
-    "Upload a chest X-ray image to predict whether "
-    "pneumonia is present."
+    "Upload a chest X-ray image to obtain a pneumonia prediction."
 )
 
+
+# --------------------------------------------------
+# Upload image
+# --------------------------------------------------
+
 uploaded_file = st.file_uploader(
-    "Upload X-ray",
-    type=["dcm", "png", "jpg", "jpeg"]
+    "Upload Chest X-ray",
+    type=["jpg", "jpeg", "png"]
 )
+
+
+# --------------------------------------------------
+# Prediction
+# --------------------------------------------------
 
 if uploaded_file is not None:
 
-    file_name = uploaded_file.name.lower()
+    # Open image
+    image = Image.open(uploaded_file)
 
-    if file_name.endswith(".dcm"):
+    # Display original image
+    st.subheader("Uploaded X-ray")
 
-        dicom = pydicom.dcmread(
-            uploaded_file
-        )
-
-        image = dicom.pixel_array
-
-    else:
-
-        file_bytes = np.asarray(
-            bytearray(uploaded_file.read()),
-            dtype=np.uint8
-        )
-
-        image = cv2.imdecode(
-            file_bytes,
-            cv2.IMREAD_GRAYSCALE
-        )
-
-    image = image.astype(np.float32)
-
-    image = (
-        image - image.min()
-    ) / (
-        image.max() - image.min() + 1e-8
+    st.image(
+        image,
+        use_container_width=True
     )
 
-    image = cv2.resize(
-        image,
-        (200, 200)
-    )
+    # ----------------------------------------------
+    # Convert to grayscale
+    # ----------------------------------------------
 
-    image = np.expand_dims(
-        image,
+    image_gray = image.convert("L")
+
+    # ----------------------------------------------
+    # Resize to model input size
+    # ----------------------------------------------
+
+    image_gray = image_gray.resize((200, 200))
+
+    # ----------------------------------------------
+    # Convert to NumPy array
+    # ----------------------------------------------
+
+    image_array = np.array(image_gray)
+
+    # ----------------------------------------------
+    # Add channel dimension
+    # ----------------------------------------------
+
+    image_array = np.expand_dims(
+        image_array,
         axis=-1
     )
 
-    image = np.repeat(
-        image,
+    # ----------------------------------------------
+    # Repeat grayscale channel 3 times
+    # Same preprocessing used during training
+    # ----------------------------------------------
+
+    image_rgb = np.repeat(
+        image_array,
         3,
         axis=-1
     )
 
-    image = np.expand_dims(
-        image,
+    # ----------------------------------------------
+    # Add batch dimension
+    # ----------------------------------------------
+
+    image_rgb = np.expand_dims(
+        image_rgb,
         axis=0
     )
 
+    # ----------------------------------------------
+    # Prediction
+    # ----------------------------------------------
+
     prediction = model.predict(
-        image,
+        image_rgb,
         verbose=0
     )[0][0]
+
+    # ----------------------------------------------
+    # Classification
+    # ----------------------------------------------
 
     if prediction >= 0.5:
 
@@ -89,15 +142,25 @@ if uploaded_file is not None:
         predicted_class = "No Pneumonia"
         probability = 1 - prediction
 
-    st.image(
-        image[0, :, :, 0],
-        caption="Uploaded Chest X-ray",
-        clamp=True
-    )
 
-    st.subheader(
-        f"Prediction: {predicted_class}"
-    )
+    # ----------------------------------------------
+    # Display result
+    # ----------------------------------------------
+
+    st.subheader("Prediction")
+
+    if predicted_class == "Pneumonia":
+
+        st.error(
+            f"Prediction: {predicted_class}"
+        )
+
+    else:
+
+        st.success(
+            f"Prediction: {predicted_class}"
+        )
+
 
     st.write(
         f"Probability: {probability * 100:.2f}%"
